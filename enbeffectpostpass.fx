@@ -1058,7 +1058,10 @@ float4 PS_Lut(VS_OUTPUT_POST IN) : SV_Target
 
 float4 PS_Distort(VS_OUTPUT_POST IN) : SV_Target
 {
-	float2 uv = IN.txcoord0.xy;
+	float2 uv = IN.txcoord0.xy * 2.0 - 1.0;
+	uv *= 0.59;
+	float lens = dot(uv, uv) + 1.0;
+	uv = lerp(IN.txcoord0.xy, (uv * lens + 1.0) * 0.5, ldistort);
 	float3 res = TextureColor.SampleLevel(Sampler1, uv, 0).xyz;
 	return float4(res, 1);
 }
@@ -1100,40 +1103,48 @@ float4 PS_CAS(VS_OUTPUT_POST0 IN) : SV_Target
 float4 PS_Water(VS_OUTPUT_POSTRD f) : SV_Target
 {
     float2 uv = f.txcoord0.xy;
-    float2 distorted_uv = uv;
-    if (f.txcoord1.z)
+    if (rd)
     {
-        float2 projection = f.txcoord0.zw;
-        projection.x -= Test1.z * 0.049;
-        projection.y += Test1.w * 0.012;
+        float2 distorted_uv = uv;
+        if (f.txcoord1.z)
+        {
+            float2 projection = f.txcoord0.zw;
+            projection.x -= Test1.z * 0.049;
+            projection.y += Test1.w * 0.012;
 
-        float time = f.txcoord1.w;
-        float fade = f.txcoord1.x;
-        float intensity = f.txcoord1.y;
+            float time = f.txcoord1.w;
+            float fade = f.txcoord1.x;
+            float intensity = f.txcoord1.y;
 
-        float2 tile_uv = projection * float2(30.0, 1.85);
-        float2 tile_id = floor(tile_uv);
-        float2 tile_fract = frac(tile_uv);
+            float2 tile_uv = projection * float2(30.0, 1.85);
+            float2 tile_id = floor(tile_uv);
+            float2 tile_fract = frac(tile_uv);
 
-        float random = frac(sin(dot(tile_id, float2(12.9898, 78.233))) * 43758.5453);
-        float2 drop_uv = (tile_fract - 0.5) * 2.0;
-        float drop_dist = length(drop_uv);
-        float drop_shape = smoothstep(0.3, 0.2, drop_dist);
+            float random = frac(sin(dot(tile_id, float2(12.9898, 78.233))) * 43758.5453);
+            float2 drop_uv = (tile_fract - 0.5) * 2.0;
+            float drop_dist = length(drop_uv);
+            float drop_shape = smoothstep(0.3, 0.2, drop_dist);
 
-        float random_time = time + random * 10.0;
-        float drop_size = sin(random_time) * 0.5 + 0.5;
-        float drop_speed = cos(random_time) * 0.5 + 0.5;
+            float random_time = time + random * 10.0;
+            float drop_size = sin(random_time) * 0.5 + 0.5;
+            float drop_speed = cos(random_time) * 0.5 + 0.5;
 
-        distorted_uv += drop_uv * drop_shape * drop_size * 0.05 * intensity;
+            distorted_uv += drop_uv * drop_shape * drop_size * 0.05 * intensity;
+        }
+
+        if (rd_racing)
+        {
+            distorted_uv = f.txcoord0.xy * rd_racing_intensity;
+        }
+
+        float3 res = TextureColor.SampleLevel(Sampler1, distorted_uv, 0).xyz;
+        return float4(res, 1.0);
     }
-
-    if (rd_racing)
+    else
     {
-        distorted_uv = f.txcoord0.xy * rd_racing_intensity;
+        float3 res = TextureColor.SampleLevel(Sampler1, uv, 0).xyz;
+        return float4(res, 1.0);
     }
-
-    float3 res = TextureColor.SampleLevel(Sampler1, distorted_uv, 0).xyz;
-    return float4(res, 1.0);
 }
 
 float4 PS_Frozen(VS_OUTPUT_POSTRD IN) : SV_Target
